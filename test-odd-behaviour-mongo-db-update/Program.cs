@@ -68,30 +68,28 @@ IMongoCollection<T> GetCollection<T>()
 async Task FindOneAndUpdateAsync<T>(T document, FilterDefinition<T> filter = null)
 {
     var bsonDocument = document.ToBsonDocument();
+
     if (filter == null)
     {
-        var bsonValue = bsonDocument[Consts.MongoFields.IdFieldName];
-        if (bsonValue.IsBsonNull)
-        {
-            throw new InvalidOperationException(
-                $"Cannot upsert when no filter is provided and {Consts.MongoFields.IdFieldName} is undefined");
-        }
-
-        filter = Builders<T>.Filter.Eq(Consts.MongoFields.IdFieldName, bsonValue);
+        var bsonValue = bsonDocument["_id"];
+        filter = Builders<T>.Filter.Eq("_id", bsonValue);
     }
 
-    var propertiesToIgnore = new List<string> { Consts.MongoFields.TypeFieldName };
+    var propertiesToIgnore = new List<string> { "_t" };
 
-    if (bsonDocument.GetValue(Consts.MongoFields.IdFieldName, null) == null)
+    if (bsonDocument.GetValue("_id", null) == null)
     {
-        propertiesToIgnore.Add(Consts.MongoFields.IdFieldName);
+        propertiesToIgnore.Add("_id");
     }
 
     var updates = bsonDocument
         .Where(a => !propertiesToIgnore.Contains(a.Name))
         .Select(a => Builders<T>.Update.Set(a.Name, a.Value));
 
-    await GetCollection<T>().FindOneAndUpdateAsync(filter, Builders<T>.Update.Combine(updates), new FindOneAndUpdateOptions<T> { IsUpsert = true });
+    await GetCollection<T>().FindOneAndUpdateAsync(
+        filter,
+        Builders<T>.Update.Combine(updates),
+        new FindOneAndUpdateOptions<T> { IsUpsert = true });
 }
 
 [BsonDiscriminator(RootClass = true)]
@@ -103,16 +101,6 @@ public class Document
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public string Url { get; set; }
-}
-
-public static class Consts
-{
-    public static class MongoFields
-    {
-        public const string IdFieldName = "_id";
-
-        public const string TypeFieldName = "_t";
-    }
 }
 
 public class ObjectIdStringGenerator : ISpecimenBuilder
